@@ -1,0 +1,15 @@
+
+{
+  "compilerOptions": {
+    "target": "es6",
+    "lib": ["es6", "ESNext"],
+    "strict": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./node_modules/@figma"
+    ],
+    "module": "CommonJS", // This can also be "esnext" if you prefer using ES modules
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  }
+}

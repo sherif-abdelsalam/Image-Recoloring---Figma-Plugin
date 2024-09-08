@@ -1,0 +1,85 @@
+<style>
+  /* Apply a background color to the entire UI */
+  body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Arial', sans-serif;
+  }
+
+  /* Center the content within a container */
+  .container {
+    text-align: center;
+    padding: 80px 20px 80px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Styling for the heading */
+  h2 {
+    font-size: 24px;
+    color: #333;
+    margin-bottom: 30px;
+  }
+
+  /* Button container with flexbox for side-by-side buttons */
+  #button-container {
+    display: flex;
+    justify-content: center; /* Center the buttons horizontally */
+    gap: 10px; /* Space between the buttons */
+  }
+
+  /* Styling for the buttons */
+  button {
+    font-size: 18px; /* Increased font size */
+    padding: 15px 30px; /* Increased padding for a larger button */
+    color: #fff;
+    background-color: #0019a8;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+  }
+
+  button:hover {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+  }
+
+  button:active {
+    background-color: #004085;
+    transform: translateY(0);
+  }
+
+  button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5);
+  }
+</style>
+
+<div class="container">
+  <h2>Intelligent Color Assistant</h2>
+  <div id="button-container">
+    <button id="select-frame">Select Frame</button>
+    <button id="create-palette">Create Palette</button>
+    <button id="assign-color">Assign Color</button>
+  </div>
+</div>
+
+<script>
+
+document.getElementById('select-frame').onclick = () => {
+  parent.postMessage({ pluginMessage: { type: 'select-frame'} }, '*');
+};
+
+document.getElementById('create-palette').onclick = () => {
+  parent.postMessage({ pluginMessage: { type: 'create-palette'} }, '*');
+};
+
+document.getElementById('assign-color').onclick = () => {
+  parent.postMessage({ pluginMessage: { type: 'assign-color'} }, '*');
+};
+
+</script>
