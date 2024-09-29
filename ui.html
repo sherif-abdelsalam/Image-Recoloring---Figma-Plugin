@@ -62,17 +62,17 @@
 <div class="container">
   <h2>Intelligent Color Assistant</h2>
   <div id="button-container">
-    <button id="select-frame">Select Frame</button>
+    <!-- <button id="select-frame">Select Frame</button> -->
     <button id="create-palette">Create Palette</button>
-    <button id="assign-color">Assign Color</button>
+    <button id="assign-color">Recolor Frame</button>
   </div>
 </div>
 
 <script>
 
-document.getElementById('select-frame').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'select-frame'} }, '*');
-};
+// document.getElementById('select-frame').onclick = () => {
+//   parent.postMessage({ pluginMessage: { type: 'select-frame'} }, '*');
+// };
 
 document.getElementById('create-palette').onclick = () => {
   parent.postMessage({ pluginMessage: { type: 'create-palette'} }, '*');

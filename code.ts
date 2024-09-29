@@ -1,10 +1,11 @@
-figma.showUI(__html__, { width: 600, height: 290 });
+figma.showUI(__html__, { width: 450, height: 290 });
 
 // Handle messages received from the HTML page
 figma.ui.onmessage = async (msg: { type: string }) => {
-  if (msg.type === 'select-frame') {
-    await handleSelectFrameMessage();
-  } else if (msg.type === 'create-palette') {
+  // if (msg.type === 'select-frame') {
+  //   await handleSelectFrameMessage();
+  // } else 
+  if (msg.type === 'create-palette') {
     await handleCreatePaletteMessage();
   } else {
     await handleAssignColorMessage(msg);
@@ -24,7 +25,7 @@ async function handleSelectFrameMessage() {
   }
 
   // Assuming you want to work with the first selected frame
-  const selectedFrame = selectedFrames[0] as FrameNode;
+  const selectedFrame = selectedFrames[selectedFrames.length-1] as FrameNode;
 
   figma.notify(`Frame "${selectedFrame.name}" selected.`);
   console.log("Frame Selected: " + selectedFrame.name);
@@ -39,6 +40,7 @@ async function handleSelectFrameMessage() {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 async function handleCreatePaletteMessage() {
+  handleSelectFrameMessage();
   const frameId = figma.root.getPluginData('selectedFrameId');
   if (!frameId) {
     figma.notify("No frame selected. Please select a frame first.");
@@ -133,18 +135,33 @@ function hexToRgb(hex: string): RGB {
 async function handleAssignColorMessage(msg: { type: string }) {
   if (msg.type === 'assign-color') {
 
-    const selection = figma.currentPage.selection;
+    // const selection = figma.currentPage.selection.filter(node => node.type === 'FRAME');
 
-    if (selection.length === 0) {
-      figma.notify("Please select a frame on the canvas.");
-      return;
-    } 
-    if (selection[0].type != "FRAME") {
-      figma.notify("Selected item is not a single frame.");
-      return;
-    } 
+    // if (selection.length === 0) {
+    //   figma.notify("Please select a frame on the canvas.");
+    //   return;
+    // } 
+    // // if (selection[0].type != "FRAME") {
+    // //   figma.notify("Selected item is not a single frame.");
+    // //   return;
+    // // } 
 
-    const frame = selection[0]; // Assuming the user selected a single frame
+    handleSelectFrameMessage();
+    const frameId = figma.root.getPluginData('selectedFrameId');
+    if (!frameId) {
+      figma.notify("No frame selected. Please select a frame first.");
+      return;
+    }
+    const node = await figma.getNodeByIdAsync(frameId);
+    if (!node || node.type !== 'FRAME') {
+      figma.notify("Selected frame is no longer available or is not a frame.");
+      return;
+    }
+
+    const frame = node as FrameNode;
+
+
+    // const frame = selection[selection.length-1]; // Assuming the user selected a single frame
     figma.notify(`Frame "${frame.name}" selected.`);
 
     const allLayers = frame.findAll(layer => layer.name !== 'main').reverse(); // Find all layers within the frame
@@ -160,12 +177,6 @@ async function handleAssignColorMessage(msg: { type: string }) {
 
     const colorPalette = await sendToAPI(jpegBytes);
 
-
-    // console.log("******************************************");
-    // console.log(colorPalette);
-    // console.log("******************************************");
-
-
     assignColorsToLayers(layers,colorPalette);
 
     figma.notify('Assign Color action triggered');
@@ -179,9 +190,12 @@ function hexToRgbValues(hex: string): [number, number, number] {
   const b = bigint & 255;         // Extract blue component
   return [r, g, b];               // Return RGB values as an array
 }
-async function assignColorsToLayers(layers: { name: string }[], colorPalette: string[]) {
 
+
+// Function to assign colors to layers
+async function assignColorsToLayers(layers: { name: string }[], colorPalette: string[]) {
   const palette = colorPalette.map(hexToRgbValues);
+  
   try {
     const response = await fetch('http://localhost:5000/assign_colors', {
       method: 'POST',
@@ -201,59 +215,160 @@ async function assignColorsToLayers(layers: { name: string }[], colorPalette: st
     const assignment = await response.json();
     console.log('Color Assignment:', assignment);
 
-    const updatedAssignment = processAssignment(assignment);
-    console.log('Updated Assignment:', updatedAssignment);
 
+
+    for (const layerName in assignment) {
+      if (assignment.hasOwnProperty(layerName)) {
+        const colorValues = assignment[layerName];  // Get the RGB values for the current layer
+        
+        console.log('Color Values:', colorValues);
+        console.log('Layer Name:', layerName);
+        // Convert the RGB values to Figma's color format (normalized between 0-1)
+        const [r, g, b] = colorValues;
+        const rgbColor: RGB = { r: r / 255, g: g / 255, b: b / 255 };
+
+        // Find the layer in Figma by its name
+        const figmaLayer = figma.currentPage.findOne(node => node.name === layerName);
+
+        if (figmaLayer && 'fills' in figmaLayer) {
+          // Get the current fills and make a copy (since fills are readonly)
+          const fills: Paint[] = JSON.parse(JSON.stringify(figmaLayer.fills));
+
+          if (fills.length > 0) {
+            // Loop through each fill and only change the color if it's relevant
+            fills.forEach((fill: Paint) => {
+              if (fill.type === 'SOLID') {
+                // Create a new object by spreading the existing fill and assigning the new color
+                const newSolidFill: SolidPaint = {
+                  ...fill,
+                  color: rgbColor
+                };
+                
+                // Replace the old fill with the new one
+                fills[0] = newSolidFill;
+
+              } else if (fill.type === 'GRADIENT_LINEAR' || fill.type === 'GRADIENT_RADIAL' || fill.type === 'GRADIENT_ANGULAR' || fill.type === 'GRADIENT_DIAMOND') {
+
+                // Create a new gradientStops array by adjusting each stop's color relative to its position
+                const newGradientStops: ColorStop[] = fill.gradientStops.map((stop: ColorStop) => {
+                  const blendedColor = blendColors(stop.color, rgbColor, stop.position); // Blend the original color with the new RGB color based on position
+                  return {
+                    ...stop,
+                    color: {
+                      r: blendedColor.r,
+                      g: blendedColor.g,
+                      b: blendedColor.b,
+                      a: stop.color.a // Preserve the original alpha value
+                    }
+                  };
+                });
+              
+                // Create a new GradientPaint object and replace the fill with this new object
+                const newGradientFill: GradientPaint = {
+                  type: fill.type,
+                  gradientTransform: fill.gradientTransform,
+                  gradientStops: newGradientStops, // The new gradient stops array
+                  opacity: fill.opacity,
+                  visible: fill.visible,
+                  blendMode: fill.blendMode,
+                };
+              
+                // Replace the original fill in the fills array
+                fills[0] = newGradientFill;
+              
+
+              } else if (fill.type === 'IMAGE') {
+                // If it's an image, you can apply some logic if needed, but usually, we leave image fills intact
+                console.log(`Layer "${layerName}" has an image fill, skipping color update.`);
+              }
+            });
+            // Assign the modified fills back to the layer
+            figmaLayer.fills = fills;
+          } else {
+            console.log(`Layer "${layerName}" has no fills.`);
+          }
+
+          console.log(`Layer "${layerName}" color updated to RGB: ${r}, ${g}, ${b}`);
+        } else if (figmaLayer && 'stroke' in figmaLayer) {
+          // For layers with strokes (e.g., vectors), update the stroke color
+          const strokes: Paint[] = JSON.parse(JSON.stringify(figmaLayer.stroke)); // Note: it should be 'strokes', not 'stroke'
+
+          if (strokes.length > 0 && strokes[0].type === 'SOLID') {
+            // Create a new SolidPaint object by copying the existing properties and replacing the color
+            const newStroke: SolidPaint = {
+              ...strokes[0], // Spread existing stroke properties
+              color: rgbColor // Update the color
+            };
+          
+            // Replace the first stroke with the new stroke
+            strokes[0] = newStroke;
+            figmaLayer.stroke = strokes; // Assign the modified strokes back to the layer
+          }
+
+          console.log(`Layer "${layerName}" stroke color updated to RGB: ${r}, ${g}, ${b}`);
+
+        } else {
+          console.log(`Layer "${layerName}" not found or does not support fills or strokes.`);
+        }
+      }
+    }
+
+    // Notify the user that the process is done
+    figma.notify("Colors have been successfully assigned to layers.");
   } catch (error) {
     console.error('Error:', error);
   }
 }
 
-
-///// recoloring
-////////////////////////////////////////////////////////////////////
-
-// Apply the dominant color logic to each layer's assigned color
-function processAssignment(assignment: Record<string, [number, number, number]>): Record<string, [number, number, number]> {
-  const updatedAssignment: Record<string, [number, number, number]> = {};
-
-  for (const layer in assignment) {
-      if (assignment.hasOwnProperty(layer)) {
-          const layerColor = assignment[layer];
-          const updatedColor = applyDominantColor(layerColor, layerColor); // Adjusting each layer based on its own assigned color
-          updatedAssignment[layer] = updatedColor;
-      }
-  }
-
-  return updatedAssignment;
+// Function to blend two colors based on a given ratio (0 to 1)
+function blendColors(originalColor: RGBA, newColor: RGB, position: number): RGB {
+  const blendFactor = position; // The position in the gradient (0 to 1)
+  return {
+    r: (originalColor.r * (1 - blendFactor)) + (newColor.r * blendFactor),
+    g: (originalColor.g * (1 - blendFactor)) + (newColor.g * blendFactor),
+    b: (originalColor.b * (1 - blendFactor)) + (newColor.b * blendFactor),
+  };
 }
 
-import * as colorConvert from 'color-convert';
-// Apply dominant color to a layer
-function applyDominantColor(layerColor: [number, number, number], targetColor: [number, number, number], scaleFactor = 1.0): [number, number, number] {
+
+
+/// recoloring with solid colors oly
+///////////////////////////////////
+// for (const layerName in assignment) {
+//   if (assignment.hasOwnProperty(layerName)) {
+//     const colorValues = assignment[layerName];  // Get the RGB values for the current layer
     
-  const targetLab = getLabValuesFromColor(targetColor);
-  const [targetA, targetB] = targetLab;
+//     console.log('Color Values:', colorValues);
+//     console.log('Layer Name:', layerName);
+//     // Convert the RGB values to Figma's color format (normalized between 0-1)
+//     const [r, g, b] = colorValues;
+//     const rgbColor: RGB = { r: r / 255, g: g / 255, b: b / 255 };
 
-  const [l, a, b] = colorConvert.rgb.lab(layerColor[0], layerColor[1], layerColor[2]);
+//     // Find the layer in Figma by its name
+//     const figmaLayer = figma.currentPage.findOne(node => node.name === layerName);
 
-  // Calculate the adjustments
-  const adjustmentA = (targetA - a) * scaleFactor;
-  const adjustmentB = (targetB - b) * scaleFactor;
+//     if (figmaLayer && 'fills' in figmaLayer) {
+//       // Get the current fills and make a copy (since fills are readonly)
+//       const fills = JSON.parse(JSON.stringify(figmaLayer.fills));
 
-  // Adjusted values
-  const newA = Math.min(255, Math.max(0, a + adjustmentA));
-  const newB = Math.min(255, Math.max(0, b + adjustmentB));
+//       if (fills.length > 0) {
+//         // Modify the first fill color
+//         fills[0] = { type: 'SOLID', color: rgbColor };
 
-  // Convert back to RGB
-  const [newR, newG, newBFinal] = colorConvert.lab.rgb([l, newA, newB]);
+//         // Assign the modified fills back to the layer
+//         figmaLayer.fills = fills;
+//       } else {
+//         // If there are no fills, assign a new one
+//         figmaLayer.fills = [{ type: 'SOLID', color: rgbColor, boundVariables: {} }];
+//       }
 
-  return [newR, newG, newBFinal];
-}
-
-
-function getLabValuesFromColor(color: [number, number, number]): [number, number] {
-  const [r, g, b] = color;
-  const [l, a, bLab] = colorConvert.rgb.lab(r, g, b);
-  return [a, bLab];
-}
+//       console.log(`Layer "${layerName}" color updated to RGB: ${r}, ${g}, ${b}`);
+//     } else if (figmaLayer && 'stroke' in figmaLayer) {
+//       // For layers with strokes (e.g., vectors), set the stroke color
+//       figmaLayer.stroke = [{ type: 'SOLID', color: rgbColor }];
+//       console.log(`Layer "${layerName}" stroke color updated to RGB: ${r}, ${g}, ${b}`);
+//     } else {
+//       console.log(`Layer "${layerName}" not found or does not support fills or strokes.`);
+//     }
+//   }
+// }
