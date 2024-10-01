@@ -1,4 +1,4 @@
-<style>
+ <!-- <style>
   /* Apply a background color to the entire UI */
   body {
     margin: 0;
@@ -62,7 +62,7 @@
 <div class="container">
   <h2>Intelligent Color Assistant</h2>
   <div id="button-container">
-    <!-- <button id="select-frame">Select Frame</button> -->
+     <button id="select-frame">Select Frame</button> 
     <button id="create-palette">Create Palette</button>
     <button id="assign-color">Recolor Frame</button>
   </div>
@@ -81,5 +81,201 @@ document.getElementById('create-palette').onclick = () => {
 document.getElementById('assign-color').onclick = () => {
   parent.postMessage({ pluginMessage: { type: 'assign-color'} }, '*');
 };
+
+</script>  -->
+
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Arial', sans-serif;
+      background-color: #e8e6f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      width: 400px;
+      padding: 20px;
+      border: 5px solid #8e79c1;
+      background-color: #f4f4f8;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 32px;
+      color: #8e79c1;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      color: #8e79c1;
+      font-size: 14px;
+      margin-bottom: 30px;
+      font-style: italic;
+    }
+
+    .section-title {
+      font-size: 18px;
+      color: #5d4b8d;
+      font-weight: bold;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    
+    .add-margin-bottom{
+      margin-bottom: 25px;
+    }
+    .section-title:before {
+      content: '▶';
+      font-size: 14px;
+      margin-right: 5px;
+    }
+    .description {
+      font-size: 14px;
+      font-style: italic;
+      color: #7c7a92;
+      margin-left: 5px;
+    }
+
+    button {
+      font-size: 16px;
+      font-weight: 600;
+      padding: 10px 20px;
+      color: #fff;
+      background-color: #8e79c1;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 10px;
+      width: 100%;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #5d4b8d;
+
+    }
+
+    .input-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    input[type="text"] {
+      height: 36px;
+      padding: 10px;
+      padding-right: 0px;
+      width: 100%;
+      max-width: 370px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    /* .input-arrow {
+      width: 40px;
+      height: 36px;
+      background-color: #8e79c1;
+      border-radius: 5px;
+      cursor: pointer;
+      color: white;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    } */
+
+    #generate-palette-ai, #generate-palette-main {
+      background-color: white;
+      border: #5d4b8d;
+      border-style: solid;
+      border-width: 2px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #5d4b8d;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    #generate-palette-ai:hover, #generate-palette-main:hover {
+      background-color: #5d4b8d;
+      color: #ddd;
+    }
+
+  </style>
+
+  <div class="container">
+    <!-- Logo Section  -->
+    <!-- <div>
+      <img src="Frame 2.png" alt="Paletto - Intelligent Color Assistant" class="logo-image" width="200" height="30">
+    </div> -->
+    <div class="logo">Paletto</div>
+    <div class="subtitle">Intelligent Color Assistant</div>
+
+    <!-- First Section -->
+     <div class="add-margin-bottom">
+        <div class="section-title"> Recoloring <span class="description">(Based on Frame Main Object) </span></div>
+
+        <button id="generate-palette-main">Generate Color Palette</button>
+        <button id="recolor-frame-main">Recolor Your Frame</button>
+    </div>
+
+    <!-- Second Section -->
+    <div class="section-title"> Recoloring <span class="description">(AI-Based Suggestion) </span></div>
+
+    <!-- Text Input and Arrow -->
+    <div class="input-wrapper">
+      <input type="text" id="user-text" placeholder="Enter your text here">
+      <!-- <span class="input-arrow">➤</span> -->
+    </div>
+
+    <button id="generate-palette-ai">Generate Color Palette</button>
+    <button id="recolor-frame-ai">Recolor Your Frame</button>
+  </div>
+
+  <!--///////////////////////////////////////////////////////////////////////////////////////////////////-->
+  <script>
+    document.getElementById('generate-palette-main').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'create-palette' } }, '*');
+    };
+
+    document.getElementById('recolor-frame-main').onclick = () => {
+      parent.postMessage({ pluginMessage: { type: 'assign-color' } }, '*');
+    };
+
+    //////////////////////////////////////////////////////////////////////////////////////////// ok
+    //////////////////////////////////////////////////////////////////////////////////////////////
+     
+// Function to get the user input
+    function getUserInput() {
+      const userInput = document.getElementById('user-text').value;
+      return userInput;
+    }
+
+    // Send user input with "generate-palette-ai" message
+    document.getElementById('generate-palette-ai').onclick = () => {
+      const userInput = getUserInput();
+      parent.postMessage({ pluginMessage: { type: 'generate-palette-ai', value: userInput } }, '*');
+    };
+
+    // Send user input with "recolor-frame-ai" message
+    document.getElementById('recolor-frame-ai').onclick = () => {
+      const userInput = getUserInput();
+      parent.postMessage({ pluginMessage: { type: 'recolor-frame-ai', value: userInput } }, '*');
+    };
 
 </script>

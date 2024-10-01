@@ -1,14 +1,18 @@
-figma.showUI(__html__, { width: 450, height: 290 });
+figma.showUI(__html__, { width: 430, height: 560 });
 
 // Handle messages received from the HTML page
-figma.ui.onmessage = async (msg: { type: string }) => {
+figma.ui.onmessage = async (msg: { type: string; value : string }) => {
   // if (msg.type === 'select-frame') {
   //   await handleSelectFrameMessage();
   // } else 
   if (msg.type === 'create-palette') {
     await handleCreatePaletteMessage();
-  } else {
+  } else if (msg.type === 'assign-color') {
     await handleAssignColorMessage(msg);
+  }else if(msg.type=== 'generate-palette-ai'){
+    await handleCreatePaletteAiVersion(msg.value);
+  }else if(msg.type=== 'recolor-frame-ai'){
+    await handleAssignColorAIVersion(msg.value);
   }
 };
 
@@ -72,6 +76,92 @@ async function handleCreatePaletteMessage() {
   }
 }
 
+
+async function fetchAIColorPalette(prompt: string) {
+  try {
+    // Construct the prompt
+    prompt += " And make sure the colors are not too similar to each other and used together to create a beautiful design." +
+              " Also, the color palette must consist of 5 colors " +
+              " and make sure to return the color codes of the color palette in hex format " +
+              " and return only the color codes in the response, do not return text or anything else.";
+
+    // Make the API request
+    const response = await fetch('http://127.0.0.1:5000/process_prompt', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ input_string: prompt }), // Send the prompt as JSON
+    });
+
+    // Check if the response is OK (status in the range 200-299)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // Parse the JSON response
+    const data = await response.json();
+
+    // Split the color codes string into a list and return it
+    const colorCodesList = data.palette.trim().split(/\s+/); // Splitting by whitespace
+    return colorCodesList;
+
+  } catch (error) {
+    console.error(error);
+    figma.notify("An error occurred while sending the request to the API.");
+    return []; // Return an empty array in case of error
+  }
+}
+
+
+async function handleCreatePaletteAiVersion(prompt: string) {
+  try {
+
+    const colorCodesList = await fetchAIColorPalette(prompt);
+    // Log the list of color codes
+    createColorPaletteOnCanvas(colorCodesList);
+    // console.log("Color Codes List:", colorCodesList);
+
+  } catch (error) {
+    console.error(error);
+    figma.notify("An error occurred while sending the request to the API.");
+  }
+}
+async function selectFrameLayers() {
+  handleSelectFrameMessage();
+  const frameId = figma.root.getPluginData('selectedFrameId');
+  if (!frameId) {
+    figma.notify("No frame selected. Please select a frame first.");
+    return []; // Return an empty array if no frame is selected
+  }
+
+  const node = await figma.getNodeByIdAsync(frameId);
+  if (!node || node.type !== 'FRAME') {
+    figma.notify("Selected frame is no longer available or is not a frame.");
+    return []; // Return an empty array if the selected node is invalid
+  }
+
+  const frame = node as FrameNode;
+  figma.notify(`Frame "${frame.name}" selected.`);
+  const allLayers = frame.findAll().reverse(); // Find all layers within the frame
+  // Convert allLayers to the desired format and reverse the order
+  const layers = allLayers.map(layer => ({ name: layer.name })).reverse();
+  return layers; // Return the array of layers
+}
+
+
+async function handleAssignColorAIVersion(prompt: string) {
+  try {
+    
+    const layers = await selectFrameLayers();
+    const colorCodesList = await fetchAIColorPalette(prompt);
+    assignColorsToLayers(layers, colorCodesList);
+
+  }catch (error){
+    console.error(error);
+    figma.notify("An error occurred while sending the request to the API.");
+  }
+}
 // Function to export a frame as JPEG
 async function exportFrameAsJPEG(frame: FrameNode): Promise<Uint8Array> {
   const imageData = await frame.exportAsync({ format: 'JPG' });
@@ -134,18 +224,6 @@ function hexToRgb(hex: string): RGB {
 
 async function handleAssignColorMessage(msg: { type: string }) {
   if (msg.type === 'assign-color') {
-
-    // const selection = figma.currentPage.selection.filter(node => node.type === 'FRAME');
-
-    // if (selection.length === 0) {
-    //   figma.notify("Please select a frame on the canvas.");
-    //   return;
-    // } 
-    // // if (selection[0].type != "FRAME") {
-    // //   figma.notify("Selected item is not a single frame.");
-    // //   return;
-    // // } 
-
     handleSelectFrameMessage();
     const frameId = figma.root.getPluginData('selectedFrameId');
     if (!frameId) {
@@ -164,7 +242,7 @@ async function handleAssignColorMessage(msg: { type: string }) {
     // const frame = selection[selection.length-1]; // Assuming the user selected a single frame
     figma.notify(`Frame "${frame.name}" selected.`);
 
-    const allLayers = frame.findAll(layer => layer.name !== 'main').reverse(); // Find all layers within the frame
+    const allLayers = frame.findAll().reverse(); // Find all layers within the frame
 
     // Convert allLayers to the desired format
     const layers = allLayers.map(layer => ({ name: layer.name }));
@@ -223,6 +301,9 @@ async function assignColorsToLayers(layers: { name: string }[], colorPalette: st
         
         console.log('Color Values:', colorValues);
         console.log('Layer Name:', layerName);
+        if(layerName==='main'){
+          continue;
+        }
         // Convert the RGB values to Figma's color format (normalized between 0-1)
         const [r, g, b] = colorValues;
         const rgbColor: RGB = { r: r / 255, g: g / 255, b: b / 255 };
@@ -328,47 +409,4 @@ function blendColors(originalColor: RGBA, newColor: RGB, position: number): RGB 
     g: (originalColor.g * (1 - blendFactor)) + (newColor.g * blendFactor),
     b: (originalColor.b * (1 - blendFactor)) + (newColor.b * blendFactor),
   };
-}
-
-
-
-/// recoloring with solid colors oly
-///////////////////////////////////
-// for (const layerName in assignment) {
-//   if (assignment.hasOwnProperty(layerName)) {
-//     const colorValues = assignment[layerName];  // Get the RGB values for the current layer
-    
-//     console.log('Color Values:', colorValues);
-//     console.log('Layer Name:', layerName);
-//     // Convert the RGB values to Figma's color format (normalized between 0-1)
-//     const [r, g, b] = colorValues;
-//     const rgbColor: RGB = { r: r / 255, g: g / 255, b: b / 255 };
-
-//     // Find the layer in Figma by its name
-//     const figmaLayer = figma.currentPage.findOne(node => node.name === layerName);
-
-//     if (figmaLayer && 'fills' in figmaLayer) {
-//       // Get the current fills and make a copy (since fills are readonly)
-//       const fills = JSON.parse(JSON.stringify(figmaLayer.fills));
-
-//       if (fills.length > 0) {
-//         // Modify the first fill color
-//         fills[0] = { type: 'SOLID', color: rgbColor };
-
-//         // Assign the modified fills back to the layer
-//         figmaLayer.fills = fills;
-//       } else {
-//         // If there are no fills, assign a new one
-//         figmaLayer.fills = [{ type: 'SOLID', color: rgbColor, boundVariables: {} }];
-//       }
-
-//       console.log(`Layer "${layerName}" color updated to RGB: ${r}, ${g}, ${b}`);
-//     } else if (figmaLayer && 'stroke' in figmaLayer) {
-//       // For layers with strokes (e.g., vectors), set the stroke color
-//       figmaLayer.stroke = [{ type: 'SOLID', color: rgbColor }];
-//       console.log(`Layer "${layerName}" stroke color updated to RGB: ${r}, ${g}, ${b}`);
-//     } else {
-//       console.log(`Layer "${layerName}" not found or does not support fills or strokes.`);
-//     }
-//   }
-// }
+} 
